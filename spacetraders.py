@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timezone
 import json
 from response import Response
+from header import headers
 
 url = "https://api.spacetraders.io/v2/"
 ships = "my/ships/"
@@ -31,15 +32,7 @@ contracts = "my/contracts/"
 get = requests.get
 post = requests.post
 
-
-
-
 get_agent = "my/agent"
-
-headers = { "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGlmaWVyIjoiT1dMXzAxIiwidmVyc2lvbiI6InYyLjMuMCIsInJlc2V0X2RhdGUiOiIyMDI1LTA2LTE1IiwiaWF0IjoxNzUwMDIyMzg1LCJzdWIiOiJhZ2VudC10b2tlbiJ9.ffd5P_AApq6iz5cOI67lx5FNaoDQGL8I-lt3G6ovxLYF3oQNM04dwRaAORTPxeN6mj41PYidHG-Xtx9Hsyh0LprvqExLitBejnUK2BJBJQUHYumzAf_cFEUQvMu7iHYJachXfY6a9T15lpBDQ4O5Ps3E54787jSIq-t46nNwSFp96i7TjhCU-gl738110XrKC9XNaJcPF7zpxMoysQ--2lrLSPJFJvrpBJn7jPFjcN20My72NfN27xgazPMkfPedLMx2Brakptls8mwdC7Xb_HaFcNSS2LehkScXExW42SOBg6t5A1A39zdYD1HBCl9FFOxkiU2roELV5turfCoe7NTDQuXlUv6-B-NvpMONM49Sx_jdfY0W7L9aCpsYPGCCHtHfXrTeJvoNqILsGDqoeD8cdKSPYMs9wRN3wJAYjsvAE1xdsRlkjxK5zygNuAAtHf128vTb9HHM1OLFHOcB5tP7IHlZ1fHH4eKB2zu26O_uYDnCb8mGlN64pw6t_Qv9JigyhNruwtuvy0OI5WBhosL9mnnAlkmFpR0KU5X-ysPNGbYGIU2yTBUG0OT3MosajWz2ViqxEAEf5frjA8jWcqPMfx6X0iEfUevylqhNDB10bUoVW7Ifsd2Lbr53ePKenNjo7A2LLK_DQkkTWxiU4IXzDlNFoApWjNmzvfrNjpg"
-           }
-
-
 
 def dwrapper(res):
     return res[0] if len(res)==1 else res
@@ -47,7 +40,7 @@ def dwrapper(res):
 def dewrapper(req):
     if type(req)==str:
         return req
-    keys=[req.json()[item] if item in req.json().keys() else [] for item in ["data","error","event"]]
+    keys=[req.json()[item] if item in req.json().keys() else [] for item in ["data","error","events"]]
     resp = Response(*keys)
     if __DEBUG__:
         pprint(resp)
@@ -63,7 +56,7 @@ def pprint(content):
     if type(content)==Response:
         print(json.dumps(content.to_json(), indent=2))
     else:
-        print("ERROR:", content)
+        print(content)
 
 def timestamp_parse(ts):
     if ts.endswith("Z"):
@@ -93,12 +86,24 @@ def list_contracts(contracts):
 def acc_contract(contract_id):
     return dewrapper(requests.post(url+contracts[:-2]+contract_id+"/accept", headers=headers))
 
+def contract_still_possible(contract_id):
+    if contract_expired(contract_id) or contract_fulfilled(contract_id):
+        return True
+    return False
+
 def contract_fulfilled_or_expired(contract_id, traveltime = 0):
     cont = get_contract(contract_id)
     remaining_time = (timestamp_parse(cont["terms"]["deadline"])-datetime.utcnow()).total_seconds()
-    if cont["fulfilled"]==True or remaining_time <= traveltime:
+    if remaining_time <= traveltime:
         return True
 
+def contract_fulfilled(contract_id):
+    cont = get_contract(contract_id)
+    if cont["deliver"]["unitsRequired"]>=cont["deliver"]["unitsFulfilled"]:
+        return True
+
+def fulfill_contract(contract_id):
+    return dpost(url+contracts+contract_id+"/fulfill", headers=headers)
 #print(acc_contract(list_contracts(get_contracts())))
 
 
@@ -218,11 +223,17 @@ def deliver(ship, contract_id, goods, units=-1): #if unit unspec -> deliver all
 def await_fly_to(ship, waypoint, stance=None):
     dest_json = fly_to(ship, waypoint, stance)
     pprint(dest_json)
-    if not "nav" in dest_json:
+    if dest_json.error!=[] and dest_json.error["code"]==4204:
+        return "Already there"
+    elif dest_json.error!=[] and dest_json.error["code"]==4214:
+        return "In Trans"
+    if not "nav" in dest_json.data:
         return dest_json
-    if all(["arrival", "departureTime"] in dest_json["nav"]):
-        arriv,depart=map(timestamp_parse,[dest_json["nav"]["arrival"].rstrip("Z"), dest_json["nav"]["departureTime"].rstrip("Z")])
-    delay = arriv-depart.total_seconds()
+    if dest_json["nav"]["status"]:
+        arriv,depart=map(timestamp_parse,[dest_json.data["nav"]["route"]["arrival"].rstrip("Z"), dest_json["nav"]["route"]["departureTime"].rstrip("Z")])
+    else:
+        arriv,depart=map(timestamp_parse,[dest_json.data["nav"]["arrival"].rstrip("Z"), dest_json["nav"]["departureTime"].rstrip("Z")])
+    delay = (arriv-depart).total_seconds()
     print("En route, ETA:", delay)
     time.sleep(delay)
     return "Arrived"

@@ -4,13 +4,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 class Response:
-    def __init__(self, data, error, event):
+    def __init__(self, data, error, events):
         self.data=data
         self.error=error
-        self.event=event
+        self.events=events
 
     def __str__(self):
-        return str({"data":self.data, "error":self.error, "event":self.event})
+        return str({"data":self.data, "error":self.error, "event":self.events})
 
     def __getitem__(self,key):
         return self.data[key]
@@ -19,4 +19,4 @@ class Response:
     #     return self.data.name
 
     def to_json(self):
-        return {"data":self.data, "error":self.error, "event":self.event}
+        return {"data":self.data, "error":self.error, "event":self.events}
