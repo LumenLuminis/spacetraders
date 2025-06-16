@@ -1,3 +1,8 @@
+#!/bin/python3
+# spacetraders-client
+# Copyright (C) 2025  LumenLuminis
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 class Response:
     def __init__(self, data, error, event):
         self.data=data

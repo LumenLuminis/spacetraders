@@ -1,5 +1,7 @@
 #!/bin/python3
-
+# spacetraders-client
+# Copyright (C) 2025  LumenLuminis
+# All Rights Reserved
 import spacetraders as sp
 from spacetraders import pprint as print
 import time
