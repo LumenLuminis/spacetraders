@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import json
 from response import Response
 from header import headers
+# from survey import Survey
 
 url = "https://api.spacetraders.io/v2/"
 ships = "my/ships/"
@@ -66,12 +67,7 @@ def timestamp_parse(ts):
 def sysSymFromFull(path):
     return path.rsplit("-",1)[0]
 
-def sense_planet(waySym):
-    sysSym = sysSymFromFull(waySym)
-    return dewrapper(requests.get(url+"systems/"+sysSym+"/waypoints/"+waySym, headers = headers))
-
-#hq_sys = sense_sys(hq.rsplit("-", 1)[0],hq)
-
+# CONTRACTS
 def get_contracts():
     return dget(url+"my/contracts", headers = headers)
 
@@ -104,19 +100,26 @@ def contract_fulfilled(contract_id):
 
 def fulfill_contract(contract_id):
     return dpost(url+contracts+contract_id+"/fulfill", headers=headers)
-#print(acc_contract(list_contracts(get_contracts())))
 
+def negotiate_contract(ship):
+    return dpost(url+ships+ship+"/negotiate/contract", headers=headers)
 
-#agent_req = requests.get(url+get_agent, headers = headers)
+# SENSORS
+def get_systems():
+    return dget(url+systems)
 
-#agent = dewrapper(agent_req) #.json()["data"]
+def get_current_waypoint(ship):
+    return dget(url+ships+ship, headers=headers)["nav"]["route"]["destination"]["symbol"]
 
-#symbol = agent["symbol"]
-#hq = agent["headquarters"]
-#cred = agent["credits"]
+def get_current_system(ship):
+    return sysSymFromFull(get_current_waypoint(ship))
 
 def sense_system(sysSym):
     return dget(url+"systems/"+sysSym+"/waypoints")
+
+def sense_planet(waySym):
+    sysSym = sysSymFromFull(waySym)
+    return dewrapper(requests.get(url+"systems/"+sysSym+"/waypoints/"+waySym, headers = headers))
 
 def sense_for_in_system(sysSym, ftype = "", ftraits = "", fmods = ""):
     filters = {}
@@ -125,13 +128,31 @@ def sense_for_in_system(sysSym, ftype = "", ftraits = "", fmods = ""):
         filters[key] = value.split(",") if value!="" else None
     return dget(url+"systems/"+sysSym+"/waypoints", params = filters)
 
+def create_chart(ship):
+    return dpost(url+ships+ship+"/chart", headers=headers)
+
+def create_survey(ship):
+    return dpost(url+ships+ship+"/survey", headers=headers)
+
+# Shipyard
 def avail_ships(planWay):
     return dewrapper(requests.get(url+"systems/"+sysSymFromFull(planWay)+"/waypoints/"+planWay+"/shipyard"))
 
 def buy_ship(shipType, waySym):
     return requests.post(url+"my/ships", headers = headers, data = {"shipType": shipType, "waypointSymbol": waySym} ).json()
 
+# Ship Maintenance and Inventory
+def get_all_ships():
+    return dget(url+"my/ships", headers=headers)
 
+def get_ship(ship):
+    return dget(url+ships+ship, headers=headers)
+
+def get_ship_cooldown(ship):
+    return dget(url+ships+ship+"/cooldown", headers=headers)
+
+
+# Navigation and Flying
 def orbit(ship):
     return post(url+"my/ships/"+ship+"/orbit", headers = headers)
 
@@ -144,21 +165,21 @@ def refuel(ship):
 def nav(ship, waySym):
     return dpost(url+ships+ship+"/navigate", headers = headers, data = {"waypointSymbol":waySym})
 
+navigate=nav
+
 def fly_to(ship, waySym, stance="Cruise"):
     orbit(ship)
     return nav(ship,waySym)
 
-def extract(ship):
-    return dewrapper(requests.post(url+ships+ship+"/extract", headers=headers))
-
 def scan(ship, target):
     return dewrapper(post(url+ships+ship+scans+target, headers=headers))
 
-def transfer(send,rec,cargo,units):
-    return dpost(url+ships+send+"/transfer", headers=headers, json = {"tradeSymbol":cargo, "units":int(units), "shipSymbol":rec})
-
 def get_status(ship):
     return dget(url+ships+ship, headers=headers)
+
+## Cargo
+def transfer(send,rec,cargo,units):
+    return dpost(url+ships+send+"/transfer", headers=headers, json = {"tradeSymbol":cargo, "units":int(units), "shipSymbol":rec})
 
 def get_cargo(ship):
     return dget(url+ships+ship+"/cargo", headers=headers)
@@ -182,15 +203,16 @@ def yeet(ship, cargo, units):
 def yeet_all(ship, cargo):
     return yeet(ship, cargo, get_cargo_amount(ship, cargo))
 
+# Mining
+def extract(ship):
+    return dewrapper(requests.post(url+ships+ship+"/extract", headers=headers))
+
+def extract_with_survey(ship, survey):
+    return dpost(url+ships+ship+"/extract/survey", headers=headers, json=survey)
+
+# Admin
 def list_ships():
     return requests.get(url+"my/ships", headers = headers).json()
-
-#priwnt(orbit("OWL_01-3"))
-#print(nav("OWL_01-3", "X1-DU70-XA5A"))
-
-#ast=sense_system("X1-DU70", ftype="ENGINEERED_ASTEROID")
-#print(flyto("OWL_01-4",ast[0]["symbol"]))
-#print(transfer("OWL_01-1", "OWL_01-3", "MOUNT_MINING_LASER_II", 1))
 
 def mine_for(ship, ore, cooldown=70, thresh=0.9):
     cargo = get_cargo(ship)
@@ -230,16 +252,12 @@ def await_fly_to(ship, waypoint, stance=None):
     if not "nav" in dest_json.data:
         return dest_json
     if dest_json["nav"]["status"]:
-        arriv,depart=map(timestamp_parse,[dest_json.data["nav"]["route"]["arrival"].rstrip("Z"), dest_json["nav"]["route"]["departureTime"].rstrip("Z")])
+        arriv=timestamp_parse(dest_json.data["nav"]["route"]["arrival"].rstrip("Z"))
     else:
-        arriv,depart=map(timestamp_parse,[dest_json.data["nav"]["arrival"].rstrip("Z"), dest_json["nav"]["departureTime"].rstrip("Z")])
-    delay = (arriv-depart).total_seconds()
+        arriv=timestamp_parse(dest_json.data["nav"]["arrival"].rstrip("Z"))
+    delay = (arriv-datetime.utcnow()).total_seconds()
     print("En route, ETA:", delay)
     time.sleep(delay)
     return "Arrived"
 
-# pprint(fly_to("OWL_01-4", "X1-DU70-H51"))
-# print(await_fly_to("OWL_01-4", "X1-DU70-H51"))
-#pprint(dock("OWL_01-4"))
-#pprint(deliver("OWL_01-4", "cmby491p9h1lcuo6xtcizerc7", "ALUMINUM_ORE"))
 

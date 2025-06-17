@@ -14,20 +14,27 @@ parser = argparse.ArgumentParser(
         description = "duh"
         )
 subparsers = parser.add_subparsers(dest="command")
-parser_contract = subparsers.add_parser("mine_contract", help="Contract command help")
-parser_contract.add_argument("ship")
-parser_contract.add_argument("mine_location")
-parser_contract.add_argument("contract_id")
-parser_contract.add_argument("yeet_overflow")
-parser_contract.add_argument("overflow_market")
-parser_contract.add_argument("market_search")
-parser_contract.add_argument("cooldown")
-parser_contract.add_argument("cargo_threshold")
+parser_mine_contract = subparsers.add_parser("mine_contract", help="Contract command help")
+parser_mine_contract.add_argument("ship")
+parser_mine_contract.add_argument("mine_location")
+parser_mine_contract.add_argument("contract_id")
+parser_mine_contract.add_argument("--yeet_overflow")
+parser_mine_contract.add_argument("--overflow_market")
+parser_mine_contract.add_argument("--market_search")
+parser_mine_contract.add_argument("--cooldown")
+parser_mine_contract.add_argument("--cargo_threshold")
 
 parser_navigate = subparsers.add_parser('navigate', help='Navigate command help')
 parser_navigate.add_argument("ship")
 parser_navigate.add_argument('waypoint', type=str, help='Waypoint')
 parser_navigate.add_argument('--stance', type=str, help='Stance')
+
+parser_contract = subparsers.add_parser("get_contract", help="Contract command help")
+parser_contract.add_argument("--id", help="Only get specified contract")
+
+parser_scan = subparsers.add_parser("scan", help="Only specify one option or none for all systems")
+parser_scan.add_argument("--sys", help="scan system")
+parser_scan.add_argument("--ship", help="scan around ship")
 
 args = parser.parse_args()
 print(args)
@@ -42,6 +49,15 @@ c_id = conts[0]["id"]
 #print(sp.get_contracts()) # THIS FOOKIN WORKS! YAY
 
 def mine_contract(ship, mine_location, contract_id, yeet_overflow=True, overflow_market=None, market_search=False, cooldown=70, thresh=1):
+    # We have to redo the default values since argparse passes none for undefined variables...
+    if yeet_overflow==None:
+        yeet_overflow=True
+    if market_search == None:
+        market_search=False
+    if cooldown == None:
+        cooldown=70
+    if thresh == None:
+        thresh=1
     ### TO DO THIS CONTRACT WE HAVE TO
     # - FLY TO THE MINE
     # - FILL OUR CARGOSPACE; IF overflow IS yeet, WE CAN YEET HERE
@@ -72,7 +88,7 @@ def mine_contract(ship, mine_location, contract_id, yeet_overflow=True, overflow
             time.sleep(cooldown)
             if yeet_overflow==True:
                 for item in sp.get_cargo_types(ship):
-                    if item not in contract_items:
+                    if item not in contract_item:
                         print(sp.yeet_all(ship, item))
         # This is potentially useless / wastefull since we fly there even if we don't have the materials, so only if we sell waste and deliver!=shop
         print(sp.await_fly_to(ship, contract_location))
@@ -99,7 +115,19 @@ def navigate(ship, waypoint):
 
 
 if args.command=="mine_contract":
-    mine_contract(args.ship, args.mine_location, args.contract_id, args.yeet_overflow, args.overflow_market, args.market_search, args.cooldown, args.thresh)
+    mine_contract(args.ship, args.mine_location, args.contract_id, args.yeet_overflow, args.overflow_market, args.market_search, cooldown=args.cooldown, thresh=args.cargo_threshold)
 
 if args.command=="navigate":
     navigate(args.ship, args.waypoint)
+
+if args.command=="scan":
+    nprint("scan")
+    if args.sys:
+        print(sp.sense_system(args.sys))
+    elif args.ship:
+        print(sp.sense_system(sp.get_current_system(args.ship)))
+    else:
+        print(sp.get_systems())
+
+if args.command=="get_contract":
+    print(sp.get_contracts())
